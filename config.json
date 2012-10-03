@@ -1,0 +1,14 @@
+{
+    "name": "HierarchicalCardBoard",
+    "className": "Hackathon.HierarchicalCardBoard",
+    "server": "https://hackathon.rallydev.com",
+    "sdk": "2.0p4",
+    "javascript": [
+        "StoryTreeItem.js",
+        "StoryTree.js",
+        "App.js"
+    ],
+    "css": [
+        "app.css"
+    ]
+}
