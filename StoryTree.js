@@ -22,7 +22,7 @@ Ext.define('Hackathon.HCB.StoryTree', {
             enableDragAndDrop: true,
             childItemsStoreConfigForParentRecordFn: function(record){
 
-                if(record.get('UserStories') && record.get('UserStories').length > 0){
+                if( this.hasDirectChildren(record) ){
                     return {
                         filters: [
                             {
@@ -57,21 +57,46 @@ Ext.define('Hackathon.HCB.StoryTree', {
 
             },
             childModelTypeForRecordFn: function(record){
-                if(record.get('_type') === 'portfolioitem'){
-                    if(record.get('Children') && record.get('Children').length > 0){
+                if( this.isPortfolioItem(record) ){
+                    if( this.hasChildren(record) ){
                         return 'PortfolioItem';
-                    } else if(record.get('UserStories') && record.get('UserStories').length > 0){
+                    } else if( this.hasUserStories(record) ){
                         return 'UserStory';
                     }
                 }
-                if(record.get('_type') === 'hierarchicalrequirement'){
+                if( this.isUserStory(record) ){
+                    //TODO maybe support Tasks
                     return 'UserStory';
                 }
 
-
             },
+
+            isUserStory: function(record){
+                return record.get('_type') === 'hierarchicalrequirement';
+            },
+
+            isPortfolioItem: function(record){
+                var recordType = record.get('_type');
+                return (/^portfolioitem\/?.*/.test(recordType));
+            },
+
+            hasChildren: function(record){
+                var children = record.get('Children');
+                return children && children.length > 0;
+            },
+
+            hasUserStories: function(record){
+                var userStories = record.get('UserStories');
+                return userStories && userStories.length > 0;
+            },
+
+            hasChildNodes: function(record){
+                //TODO support Tasks?
+                return this.hasChildren(record) || this.hasUserStories(record);
+            },
+
             parentAttributeForChildRecordFn: function(record){
-                if(record.get('Children') && record.get('Children').length > 0){
+                if( this.hasChildren(record) ){
                     return 'Parent';
                 } else if(record.get('UserStories') && record.get('UserStories').length > 0){
                    return 'PortfolioItem';
