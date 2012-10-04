@@ -50,19 +50,24 @@ Ext.define('Hackathon.HierarchicalCardBoard', {
     },
 
     onTreeItemSelected: function(record){
-        // debugger;
         this.cardBoard = this.down('#rightSide').removeAll();
 
-        var selectedRef = record.get('_ref');
-        var parentType = record.get('_type');
-        var children = record.get('Children');
-        if(children && children.length === 0){
+        if( !this._hasChildren(record) ){
             this.cardBoardConfig.storeConfig.filters = [
                 { property: "ObjectID", value: 0}
             ];
+            this.cardBoardConfig.types = [ "User Story" ];
+            this.cardBoardConfig.columns = undefined;
+            this.cardBoardConfig.attribute = "ScheduleState";
+
+            this.cardBoard = this.down('#rightSide').add(this.cardBoardConfig);
         }
         else{
-            var typePath = children[0]._type;
+            var selectedRef = record.get('_ref');
+            var parentType = record.get('_type');
+
+            var child = this._getFirstChild(record);
+            var typePath = child._type;
             this.cardBoardConfig.types = [ typePath ];
             this.cardBoardConfig.storeConfig.filters = [
                 {
@@ -71,7 +76,7 @@ Ext.define('Hackathon.HierarchicalCardBoard', {
                 }
             ];
 
-            if(parentType.indexOf("portfolioitem") === 0) {
+            if(typePath.indexOf("PortfolioItem") === 0) {
                 this.cardBoardConfig.attribute = "State";
                 var me = this;
                 this._buildColumns(typePath, function(columns) {
@@ -82,19 +87,28 @@ Ext.define('Hackathon.HierarchicalCardBoard', {
             else {
                 this.cardBoardConfig.columns = undefined;
                 this.cardBoardConfig.attribute = "ScheduleState";
-                this.cardBoard = this.down('#rightSide').add(this.cardBoardConfig);
                 this.cardBoardConfig.storeConfig.filters = [
                     {
                         property: "PortfolioItem",
                         value: selectedRef
                     }
                 ];
-                // debugger;
                 this.cardBoard = this.down('#rightSide').add(this.cardBoardConfig);
             }
 
         }
+    },
 
+    _hasChildren: function(record){
+        var children = record.get('Children')||[];
+        var userStories = record.get('UserStories')||[];
+        return (children.length + userStories.length) > 0;
+    },
+
+    _getFirstChild: function(record){
+        var children = record.get('Children')||[];
+        children = children.concat( record.get('UserStories')||[] );
+        return children[0];
     },
 
     _buildColumns: function(typePath, callback) {
