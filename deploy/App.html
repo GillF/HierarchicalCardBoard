@@ -7,136 +7,434 @@
 
     <script type="text/javascript">
         Rally.onReady(function() {
-            Ext.define('Hackathon.HCB.StoryTree', {
+            Ext.define('Hackathon.HCB.PortfolioHierarchy', {
+                alias: 'widget.hackathonportfoliohierarchy',
                 extend: 'Ext.Container',
+                requires: ['Rally.ui.tooltip.PercentDoneToolTip',
+                        'Rally.data.util.PortfolioItemHelper'],
             
-                initComponent: function(){
-                    this.callParent(arguments);
-                    this.add({
-                        xtype: 'component',
-                        autoEl: 'h1',
-                        html: 'Unscheduled Story Hierarchy'
-                    });
-                    this.add({
-                        xtype: 'component',
-                        cls: 'grayLabel',
-                        html: 'Drill down to see unscheduled leaf user stories. Drag and drop into an iteration on the right.'
-                    });
-                    this.buildTree();
-                },
+                layout: 'auto',
             
-                buildTree: function(){
-                    var tree = Ext.widget('rallytree', {
-                        topLevelModel: 'PortfolioItem',
-                        enableDragAndDrop: true,
-                        childItemsStoreConfigForParentRecordFn: function(record){
-            
-                            if(record.get('UserStories') && record.get('UserStories').length > 0){
-                                return {
-                                    filters: [
-                                        {
-                                            property: 'PortfolioItem',
-                                            value: record.get('_ref'),
-                                            operator: '='
-                                        },
-                                        {
-                                            property: 'Iteration',
-                                            value: 'null',
-                                            operator: '='
-                                        }
-                                    ]
-                                };
-                            }
-                            if(record.get('_type') === 'hierarchicalrequirement'){
-                                return {
-                                    filters: [
-                                        {
-                                            property: 'Parent',
-                                            value: record.get('_ref'),
-                                            operator: '='
-                                        },
-                                        {
-                                            property: 'Iteration',
-                                            value: 'null',
-                                            operator: '='
-                                        }
-                                    ]
-                                };
-                            }
-            
-                        },
-                        childModelTypeForRecordFn: function(record){
-                            if(record.get('_type') === 'portfolioitem'){
-                                if(record.get('Children') && record.get('Children').length > 0){
-                                    return 'PortfolioItem';
-                                } else if(record.get('UserStories') && record.get('UserStories').length > 0){
-                                    return 'UserStory';
-                                }
-                            }
-                            if(record.get('_type') === 'hierarchicalrequirement'){
-                                return 'UserStory';
-                            }
-            
-            
-                        },
-                        parentAttributeForChildRecordFn: function(record){
-                            if(record.get('Children') && record.get('Children').length > 0){
-                                return 'Parent';
-                            } else if(record.get('UserStories') && record.get('UserStories').length > 0){
-                               return 'PortfolioItem';
-                            }
-                        },
-                        canExpandFn: function(record){
-                            return (record.get('Children') && record.get('Children').length > 0) ||
-                            (record.get('UserStories') && record.get('UserStories').length > 0);
-                        },
-                        dragThisGroupOnMeFn: function(record){
-                            return false;
-                        },
-                        treeItemConfigForRecordFn: function(record){
-                            var canDrag = record.get('_type') === 'hierarchicalrequirement' && record.get('Children').length === 0;
-            
-                            var config = {
-                                canDrag: canDrag
-                            };
-                            if(record.get('_type') === 'hierarchicalrequirement'){
-                                config.xtype = 'rallystorytreeitem';
-                            }
-                            return config;
-                        }
-            
-                    });
-            
-                    this.add(tree);
-                }
-            });
-            Ext.define('Hackathon.HierarchicalCardBoard', {
-                extend: 'Rally.app.App',
-                componentCls: 'app',
-            
-                items: [
+                items:[
                     {
-                        xtype: 'container',
-                        cls: 'leftSide',
-                        itemId: 'leftSide'
+                        xtype:'container',
+                        itemId:'header',
+                        cls:'header'
                     },
                     {
-                        xtype: 'container',
-                        cls: 'rightSide',
-                        itemId: 'rightSide'
+                        xtype:'container',
+                        itemId:'bodyContainer'
                     }
                 ],
             
-                launch: function() {
-                    this.buildStoryTree();
+                cls: 'portfolio-hierarchy-app',
+            
+                initComponent: function() {
+                    this.callParent(arguments);
+                    this.addEvents('treeitemselected');
+            
+                    this.on('afterrender', function(){
+                        this._attachPercentDoneToolTip();
+                    }, this);
+            
+                    Rally.data.util.PortfolioItemHelper.loadTypeOrDefault({
+                        typeRef: 'PortfolioItem/Strategy', //this.getSetting('type'),
+                        defaultToLowest: false,
+                        success: this.addTreeForType,
+                        scope: this
+                    });
                 },
             
-                buildStoryTree: function(){
-                    var storyTree = Ext.create('PlanIterationsAndReleases.StoryTree');
-                    this.down('#leftSide').add(storyTree);
+                _drawHeader: function(){
+                    var header = this.down('#header');
+            
+                    // if(Rally.alm){
+                    //     header.add(this._buildHelpComponent());
+                    // }
+            
+                    // header.add(this._buildFilterInfo());
+                },
+            
+                addTreeForType: function(record){
+            
+                    this.typeName = record.get('Name');
+                    this._drawHeader();
+            
+                    var tree = this.buildTreeForType(record);
+                    this.down('#bodyContainer').add(tree);
+                },
+            
+                buildTreeForType: function(typeRecord){
+                    var config = {
+                        topLevelModel: typeRecord.get('TypePath'),
+                        childModelTypeForRecordFn: this.getChildModelTypeForRecordFn,
+                        parentAttributeForChildRecordFn: this.getParentAttributeForChildRecordFn,
+                        canExpandFn: this.canExpandItem,
+                        enableDragAndDrop: true,
+                        dragDropGroupFn: this.dragDropGroup,
+                        dragThisGroupOnMeFn: this.dragThisGroupOnMe,
+                        shouldRemoveTreeItemWhenDraggedFromTopOfTree: false,
+                        scope: this,
+                        treeItemConfigForRecordFn: this.treeItemConfigForRecord,
+                        topLevelStoreConfig: {
+                            filters: [],
+            
+                            context: {
+                                project: undefined,
+                                workspace: this.context.getWorkspace()._ref
+                            }
+                        },
+                        listeners: {
+                            beforerecordsaved: this.beforeRecordSaved,
+                            itemselected: this._onTreeItemSelected,
+                            scope: this
+                        }
+                    };
+            
+                    return Ext.create('Rally.ui.tree.Tree', config);
+                },
+            
+                _onTreeItemSelected: function(treeItem){
+                    this.fireEvent('treeitemselected', treeItem.record);
+                },
+            
+                treeItemConfigForRecord: function(record){
+                    return { selectable: true };
+                },
+            
+                beforeRecordSaved: function(record, newParentRecord){
+                    if(record.get('_type') == 'hierarchicalrequirement'){
+                        if(newParentRecord.get('_type') === 'hierarchicalrequirement'){
+                            record.set('PortfolioItem', '');
+                        } else {
+                            record.set('Parent', '');
+                        }
+                    }
+                },
+            
+                _isRecordBottomPortfolioLevel: function(record){
+                    return record.self.ordinal === 0;
+                },
+            
+                _isUserStory: function(record) {
+                    return record.get('_type') == 'hierarchicalrequirement';
+                },
+            
+                getChildModelTypeForRecordFn: function(record){
+            
+                    return (this._isRecordBottomPortfolioLevel(record) || this._isUserStory(record))
+                        ? 'UserStory'
+                        : 'PortfolioItem/' + record.getField('Children').allowedValueType._refObjectName;
+                },
+            
+                getParentAttributeForChildRecordFn: function(record){
+                    return this._isRecordBottomPortfolioLevel(record)? 'PortfolioItem': 'Parent';
+                },
+            
+                canExpandItem: function(record){
+                    return record.get('DirectChildrenCount') > 0
+                        || (record.get('UserStories') && record.get('UserStories').length > 0)
+                        || (record.get('Children') && record.get('Children').length > 0);
+                },
+            
+                dragDropGroup: function(record){
+                    return record.get('_type').toLowerCase();
+                },
+            
+                dragThisGroupOnMe: function(record){
+                    if(this._isUserStory(record) || this._isRecordBottomPortfolioLevel(record)){
+                        return 'hierarchicalrequirement';
+                    }
+            
+                    return 'portfolioitem/' + record.getField('Children').allowedValueType._refObjectName.toLowerCase();
+                },
+            
+                _attachPercentDoneToolTip: function() {
+                    Ext.create('Rally.ui.tooltip.PercentDoneToolTip', {
+                        target: this.getEl(),
+                        delegate: '.percentDoneContainer',
+                        percentDoneName: 'PercentDoneByStoryCount',
+                        listeners: {
+                            beforeshow: function(tip) {
+            
+                                var treeItemEl = Ext.get(tip.triggerElement).up('.treeItem');
+                                var treeItem = Ext.getCmp(treeItemEl.id);
+            
+                                tip.updateContent(treeItem.getRecord().data);
+                            },
+                            scope: this
+                        }
+                    });
+                },
+            
+                _buildHelpComponent:function (config) {
+                    return Ext.create('Ext.Component', Ext.apply({
+                        cls:Rally.util.Test.toBrowserTestCssClass('portfolio-hierarchy-help-container') + ' rally-help-icon',
+                        renderTpl:'<a href="#" title="Launch Help"></a>',
+                        listeners:{
+                            click:{
+                                element:'el',
+                                fn: function(){
+                                    Rally.alm.util.Help.launchHelp({
+                                        id:268
+                                    });
+                                },
+                                stopEvent:true
+                            },
+                            scope:this
+                        }
+                    }, config));
+                },
+            
+                _buildFilterInfo: function(){
+                    return Ext.create('Rally.ui.tooltip.FilterInfo', {
+                        projectName: this.getSetting('project') && this.getContext().get('project').Name,
+                        typeName: this.typeName,
+                        scopeUp: this.getSetting('projectScopeUp') == 'true' ,
+                        scopeDown: this.getSetting('projectScopeDown') == 'true'
+                    });
                 }
             
             });
+            
+            (function(){
+                //var leftSideWidth = 350;
+                Ext.define('Hackathon.HierarchicalCardBoard', {
+                    extend: 'Rally.app.App',
+                    componentCls: 'app',
+            
+                    layout: 'auto',
+            
+                    style: {
+                        backgroundColor: '#FFF'
+                    },
+            
+                    defaults: {
+                        padding: 5
+                    },
+            
+                    items: [
+                        {
+                            xtype: 'container',
+                            cls: 'leftSide',
+                            itemId: 'leftSide',
+                            // region: 'west',
+                            //width: leftSideWidth,
+                            collapsible: true
+                        },
+                        {
+                            xtype: 'container',
+                            cls: 'rightSide',
+                            itemId: 'rightSide'
+                            // region: 'center'
+                        },
+                        {
+                            xtype: 'panel',
+                            cls: 'southSide',
+                            itemId: 'southSide',
+                            // region: 'south',
+                            items:[
+                                // {
+                                //     xtype: 'hackathonartifactholder',
+                                //     cls: 'artifactHolder',
+                                //     itemId: 'artifactHolder',
+                                //     //width: leftSideWidth,
+                                // },
+                                {
+                                    xtype: 'container',
+                                    itemId: 'chartHolder',
+                                    width: '75%'
+                                }
+                            ]
+                        }
+                    ],
+            
+                    launch: function() {
+                        this.buildStoryTree();
+                        this.buildCardBoard();
+                    },
+            
+                    buildStoryTree: function(){
+                        var portfolioHierarchyConfig = {
+                            xtype: 'hackathonportfoliohierarchy',
+                            context: this.getContext(),
+                            listeners: {
+                                scope: this,
+                                treeitemselected: this.onTreeItemSelected
+                            }
+                        };
+                        this.down('#leftSide').add(portfolioHierarchyConfig);
+                    },
+            
+                    onTreeItemSelected: function(record){
+                        this.down('#rightSide').removeAll();
+                        this.down('#chartHolder').removeAll();
+            
+                        if( !this._hasChildren(record) ){
+                            this.cardBoardConfig.storeConfig.filters = [
+                                { property: "ObjectID", value: 0}
+                            ];
+                            this.cardBoardConfig.types = [ "User Story" ];
+                            this.cardBoardConfig.columns = undefined;
+                            this.cardBoardConfig.attribute = "ScheduleState";
+            
+                            this.cardBoard = this.down('#rightSide').add(this.cardBoardConfig);
+                        }
+                        else{
+                            var selectedRef = record.get('_ref');
+                            var parentType = record.get('_type');
+            
+                            var child = this._getFirstChild(record);
+                            var typePath = child._type;
+                            this.cardBoardConfig.types = [ typePath ];
+                            this.cardBoardConfig.storeConfig.filters = [
+                                {
+                                    property: "Parent",
+                                    value: selectedRef
+                                }
+                            ];
+            
+                            if(typePath.indexOf("PortfolioItem") === 0) {
+                                this.cardBoardConfig.attribute = "State";
+                                var me = this;
+                                this._buildColumns(typePath, function(columns) {
+                                    me.cardBoardConfig.columns = columns;
+                                    me.cardBoard = me.down('#rightSide').add(me.cardBoardConfig);
+                                });
+                            }
+                            else {
+                                this.cardBoardConfig.columns = undefined;
+                                this.cardBoardConfig.attribute = "ScheduleState";
+                                this.cardBoardConfig.storeConfig.filters = [
+                                    {
+                                        property: "PortfolioItem",
+                                        value: selectedRef
+                                    }
+                                ];
+                                this.cardBoard = this.down('#rightSide').add(this.cardBoardConfig);
+                            }
+            
+                        }
+                    },
+            
+                    _hasChildren: function(record){
+                        var children = record.get('Children')||[];
+                        var userStories = record.get('UserStories')||[];
+                        return (children.length + userStories.length) > 0;
+                    },
+            
+                    _getFirstChild: function(record){
+                        var children = record.get('Children')||[];
+                        children = children.concat( record.get('UserStories')||[] );
+                        return children[0];
+                    },
+            
+                    _buildColumns: function(typePath, callback) {
+                        var me = this;
+                        this._getTypeDefRefFor(typePath, function(typeRef) {
+                            me._getStates(typeRef, function(states) {
+                                var columns = [
+                                        {
+                                            displayValue:'No Entry',
+                                            value:null
+                                        }
+                                    ];
+            
+                                Ext.Array.each(states, function (state) {
+                                    columns.push({
+                                        value:state.get('_ref'),
+                                        displayValue:state.get('Name'),
+                                        stateRecord:state
+                                    });
+                                });
+            
+                                callback(columns);
+                            });
+                        });
+                    },
+            
+                    _getTypeDefRefFor: function(typePath, callback) {
+                        Ext.create('Rally.data.WsapiDataStore', {
+                            model:'TypeDefinition',
+                            context: this.getNotStupidContext(),
+                            autoLoad:true,
+                            filters:[
+                                {
+                                    property: 'TypePath',
+                                    value: typePath
+                                }
+                            ],
+                            listeners: {
+                                load: function(store, records) {
+                                    callback(records[0].get('_ref'));
+                                }
+                            }
+                        });
+                    },
+            
+                    _getStates: function(typeRef, callback) {
+                        Ext.create('Rally.data.WsapiDataStore', {
+                            model:'State',
+                            context: this.getNotStupidContext(),
+                            autoLoad:true,
+                            fetch:['Name', 'WIPLimit', 'Description'],
+                            filters:[
+                                {
+                                    property: 'TypeDef',
+                                    value: typeRef
+                                },
+                                {
+                                    property:'Enabled',
+                                    value:true
+                                }
+                            ],
+                            sorters:[
+                                {
+                                    property:'OrderIndex',
+                                    direction:'ASC'
+                                }
+                            ],
+                            listeners:{
+                                load:function (store, records) {
+                                    callback(records);
+                                }
+                            }
+                        });
+                    },
+            
+                    buildCardBoard: function(){
+                        this.cardBoardConfig = {
+                            xtype: 'rallycardboard',
+                            types: ['User Story'],
+                            attribute: 'ScheduleState',
+                            storeConfig: {
+                                filters: [
+                                    { property: "ObjectID", value: 0}
+                                ],
+                                autoLoad: true,
+                                context: this.getNotStupidContext()
+                            },
+                            //enableRanking: this.getContext().getWorkspace().WorkspaceConfiguration.DragDropRankingEnabled,
+            
+                            cardConfig: {
+                                componentCls: 'iterationtrackingboard-card',
+                                //fields: ['Tasks'],
+                                editable: true,
+                                showHeaderMenu: true
+                            }
+            
+                        };
+                        this.cardBoard = this.down('#rightSide').add(this.cardBoardConfig);
+                    },
+            
+                    getNotStupidContext: function() {
+                        return {
+                            workspace: this.getContext().getWorkspace()._ref,
+                            project: null
+                       };
+                    }
+                });
+            }());
 
             Rally.launchApp('Hackathon.HierarchicalCardBoard', {
                 name: 'HierarchicalCardBoard'
@@ -145,8 +443,30 @@
     </script>
 
     <style type="text/css">
-        .app {
-             /* Add app styles here */
+        .leftSide {
+            float: left;
+            width: 25%;
+        }
+        
+        .leftSide .treeItem .pill .textContent {
+            margin-right: 0;
+        }
+        
+        .rightSide {
+            float: right;
+            width: 75%;
+        }
+        
+        .southSide {
+            clear: both;
+            width: 100%;
+            height: 400px;
+        }
+        
+        .artifactHolder {
+            height: 400px;
+            border: 2px solid black;
+            border-radius: 15px;
         }
     </style>
 </head>

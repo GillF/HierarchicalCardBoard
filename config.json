@@ -4,7 +4,8 @@
     "server": "https://hackathon.rallydev.com",
     "sdk": "2.0p4",
     "javascript": [
-    "PortfolioHierarchy.js",
+        // "ArtifactHolder.js",
+        "PortfolioHierarchy.js",
         "App.js"
     ],
     "css": [

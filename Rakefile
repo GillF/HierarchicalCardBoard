@@ -9,7 +9,7 @@ task :default => [:debug, :build]
 
 desc "Create an app with the provided name (and optional SDK version and rally server)"
 task :new, :app_name, :sdk_version, :server do |t, args|
-  args.with_defaults(:sdk_version => "2.0p4", :server => "https://rally1.rallydev.com")
+  args.with_defaults(:sdk_version => "2.0p4", :server => "https://hackathon.rallydev.com/apps/2.0p4/sdk-debug.js?server=https://test1cluster.rallydev.com")
   Dir.chdir(Rake.original_dir)
 
   server = set_https(args[:server])
@@ -114,7 +114,7 @@ module Rally
     #
     # Config:
     #         deploy.json
-    #         { 
+    #         {
     #          ...
     #          "server": "http://rally1.rallydev.com"   # or another instance
     #          "username": "someone@domain.com"         # rally login name
@@ -308,7 +308,7 @@ module Rally
           panels.each do |panel|
             custom_html_panel_oid = panel['oid'] if panel['title'] == "Custom HTML"
           end
-          
+
           # Create new panel
           request_path = "/slm/dashboard/addpanel.sp"
           params = {:cpoid => @project_oid, :_slug => "/custom/#{@page_oid}"}
@@ -377,7 +377,7 @@ module Rally
       # This takes into consideration error handling for finding > 1 project with the same name.  Lets
       # just assume that 80% of the time, project names are unique and it's handy to set in the config file.
       # All others with conflicting names will just have to manually lookup the project oid and set in config file.
-      def resolve_project 
+      def resolve_project
 
           # oid not given; lookup by name
           if @project_oid.nil? || @project_oid.empty?
