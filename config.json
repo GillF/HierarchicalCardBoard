@@ -4,9 +4,7 @@
     "server": "https://hackathon.rallydev.com",
     "sdk": "2.0p4",
     "javascript": [
-        // "StoryTreeItem.js",
-        // "StoryTree.js",
-        "PortfolioHierarchy.js",
+    "PortfolioHierarchy.js",
         "App.js"
     ],
     "css": [

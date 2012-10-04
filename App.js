@@ -18,7 +18,7 @@ Ext.define('Hackathon.HierarchicalCardBoard', {
             cls: 'leftSide',
             itemId: 'leftSide',
             region: 'west',
-            width: 600,
+            width: 350,
             collapsible: true
         },
         {
@@ -27,26 +27,17 @@ Ext.define('Hackathon.HierarchicalCardBoard', {
             itemId: 'rightSide',
             region: 'center',
             items: [
-                // {
-                //     xtype: 'rallycardboard',
-                //     cardConfig: {
-                //         componentCls: 'iterationtrackingboard-card',
-                //         //fields: ['Tasks'],
-                //         editable: true,
-                //         showHeaderMenu: true
-                //     }
-                // }
+
             ]
         }
     ],
 
     launch: function() {
         this.buildStoryTree();
+        this.buildCardBoard();
     },
 
     buildStoryTree: function(){
-
-//        var storyTree = Ext.create('Hackathon.HCB.StoryTree');
         var portfolioHierarchyConfig = {
             xtype: 'hackathonportfoliohierarchy',
             context: this.getContext(),
@@ -59,7 +50,156 @@ Ext.define('Hackathon.HierarchicalCardBoard', {
     },
 
     onTreeItemSelected: function(record){
-        alert(record.get('ObjectID'));
-    }
+        // debugger;
+        this.cardBoard = this.down('#rightSide').removeAll();
 
+        var selectedRef = record.get('_ref');
+        var parentType = record.get('_type');
+        var children = record.get('Children');
+        if(children && children.length === 0){
+            this.cardBoardConfig.storeConfig.filters = [
+                { property: "ObjectID", value: 0}
+            ];
+        }
+        else{
+            var typePath = children[0]._type;
+            this.cardBoardConfig.types = [ typePath ];
+            this.cardBoardConfig.storeConfig.filters = [
+                {
+                    property: "Parent",
+                    value: selectedRef
+                }
+            ];
+
+            if(parentType.indexOf("portfolioitem") === 0) {
+                this.cardBoardConfig.attribute = "State";
+                var me = this;
+                this._buildColumns(typePath, function(columns) {
+                    me.cardBoardConfig.columns = columns;
+                    me.cardBoard = me.down('#rightSide').add(me.cardBoardConfig);
+                });
+            }
+            else {
+                this.cardBoardConfig.columns = undefined;
+                this.cardBoardConfig.attribute = "ScheduleState";
+                this.cardBoard = this.down('#rightSide').add(this.cardBoardConfig);
+                this.cardBoardConfig.storeConfig.filters = [
+                    {
+                        property: "PortfolioItem",
+                        value: selectedRef
+                    }
+                ];
+                // debugger;
+                this.cardBoard = this.down('#rightSide').add(this.cardBoardConfig);
+            }
+
+        }
+
+    },
+
+    _buildColumns: function(typePath, callback) {
+        var me = this;
+        this._getTypeDefRefFor(typePath, function(typeRef) {
+            me._getStates(typeRef, function(states) {
+                var columns = [
+                        {
+                            displayValue:'No Entry',
+                            value:null
+                        }
+                    ];
+
+                Ext.Array.each(states, function (state) {
+                    console.log(state.get('Name'), state.get('_ref'));
+                    columns.push({
+                        value:state.get('_ref'),
+                        displayValue:state.get('Name'),
+                        stateRecord:state
+                    });
+                });
+
+                callback(columns);
+            });
+        });
+    },
+
+    _getTypeDefRefFor: function(typePath, callback) {
+        Ext.create('Rally.data.WsapiDataStore', {
+            model:'TypeDefinition',
+            context: this.getNotStupidContext(),
+            autoLoad:true,
+            filters:[
+                {
+                    property: 'TypePath',
+                    value: typePath
+                }
+            ],
+            listeners: {
+                load: function(store, records) {
+                    callback(records[0].get('_ref'));
+                }
+            }
+        });
+    },
+
+    _getStates: function(typeRef, callback) {
+        Ext.create('Rally.data.WsapiDataStore', {
+            model:'State',
+            context: this.getNotStupidContext(),
+            autoLoad:true,
+            fetch:['Name', 'WIPLimit', 'Description'],
+            filters:[
+                {
+                    property: 'TypeDef',
+                    value: typeRef
+                },
+                {
+                    property:'Enabled',
+                    value:true
+                }
+            ],
+            sorters:[
+                {
+                    property:'OrderIndex',
+                    direction:'ASC'
+                }
+            ],
+            listeners:{
+                load:function (store, records) {
+                    callback(records);
+                }
+            }
+        });
+    },
+
+    buildCardBoard: function(){
+        this.cardBoardConfig = {
+            xtype: 'rallycardboard',
+            types: ['User Story'],
+            attribute: 'ScheduleState',
+            storeConfig: {
+                filters: [
+                    { property: "ObjectID", value: 0}
+                ],
+                autoLoad: true,
+                context: this.getNotStupidContext()
+            },
+            //enableRanking: this.getContext().getWorkspace().WorkspaceConfiguration.DragDropRankingEnabled,
+
+            cardConfig: {
+                componentCls: 'iterationtrackingboard-card',
+                //fields: ['Tasks'],
+                editable: true,
+                showHeaderMenu: true
+            }
+
+        };
+        this.cardBoard = this.down('#rightSide').add(this.cardBoardConfig);
+    },
+
+    getNotStupidContext: function() {
+        return {
+            workspace: this.getContext().getWorkspace()._ref,
+            project: null
+       };
+    }
 });
