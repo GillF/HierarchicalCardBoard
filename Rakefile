@@ -9,7 +9,7 @@ task :default => [:debug, :build]
 
 desc "Create an app with the provided name (and optional SDK version and rally server)"
 task :new, :app_name, :sdk_version, :server do |t, args|
-  args.with_defaults(:sdk_version => "2.0p4", :server => "https://hackathon.rallydev.com/apps/2.0p4/sdk-debug.js?server=https://test1cluster.rallydev.com")
+  args.with_defaults(:sdk_version => "2.0p5", :server => "https://rally1.rallydev.com")
   Dir.chdir(Rake.original_dir)
 
   server = set_https(args[:server])
@@ -114,7 +114,7 @@ module Rally
     #
     # Config:
     #         deploy.json
-    #         {
+    #         { 
     #          ...
     #          "server": "http://rally1.rallydev.com"   # or another instance
     #          "username": "someone@domain.com"         # rally login name
@@ -179,8 +179,10 @@ module Rally
       end
 
       def deploy
-        puts "Deploying to Rally..."
 
+        raise "Unable to deploy.  Missing values in deploy.json config file. Aborting..." if !@config.deployable?
+
+        puts "Deploying to Rally..."
         login  # obtains session info
         resolve_project  # determine if using oid or name from config
 
@@ -308,7 +310,7 @@ module Rally
           panels.each do |panel|
             custom_html_panel_oid = panel['oid'] if panel['title'] == "Custom HTML"
           end
-
+          
           # Create new panel
           request_path = "/slm/dashboard/addpanel.sp"
           params = {:cpoid => @project_oid, :_slug => "/custom/#{@page_oid}"}
@@ -377,7 +379,7 @@ module Rally
       # This takes into consideration error handling for finding > 1 project with the same name.  Lets
       # just assume that 80% of the time, project names are unique and it's handy to set in the config file.
       # All others with conflicting names will just have to manually lookup the project oid and set in config file.
-      def resolve_project
+      def resolve_project 
 
           # oid not given; lookup by name
           if @project_oid.nil? || @project_oid.empty?
@@ -658,13 +660,20 @@ module Rally
         javascript = Rally::RallyJson.get_array(config_file, "javascript")
         css = Rally::RallyJson.get_array(config_file, "css")
 
-        deploy_server = Rally::RallyJson.get(deploy_file, "server")
-        username = Rally::RallyJson.get(deploy_file, "username")
-        password = Rally::RallyJson.get(deploy_file, "password")
-        project_oid = Rally::RallyJson.get(deploy_file, "projectOid")
-        project = Rally::RallyJson.get(deploy_file, "project")
-        page_oid = Rally::RallyJson.get(deploy_file, "pageOid.cached")
-        panel_oid = Rally::RallyJson.get(deploy_file, "panelOid.cached")
+        if File.exist? deploy_file
+          deploy_server = Rally::RallyJson.get(deploy_file, "server")
+          username = Rally::RallyJson.get(deploy_file, "username")
+          password = Rally::RallyJson.get(deploy_file, "password")
+          project_oid = Rally::RallyJson.get(deploy_file, "projectOid")
+          project = Rally::RallyJson.get(deploy_file, "project")
+          page_oid = Rally::RallyJson.get(deploy_file, "pageOid.cached")
+          panel_oid = Rally::RallyJson.get(deploy_file, "panelOid.cached")
+
+          raise "Error: Deploy server not found in deploy.json" if deploy_server.nil?
+          raise "Error: Username not found in deploy.json" if username.nil?
+          raise "Error: Password not found in deploy.json" if password.nil?
+          raise "Error: Project name or OID not found in deploy.json" if project_oid.nil? && project.nil?
+        end
 
         config = Rally::AppSdk::AppConfig.new(name, sdk_version, server, config_file, deploy_file)
         config.javascript = javascript
@@ -734,6 +743,13 @@ module Rally
           raise Exception.new(msg)
         end
 
+      end
+
+      def deployable?
+        (File.exist? @deploy_file) \
+          && !@deploy_server.nil? && !@deploy_server.empty? \
+          && !@username.nil? && !@username.empty? \
+          && !@password.nil? && !@password.empty?
       end
 
       def sdk_debug_path
@@ -937,6 +953,8 @@ STYLE_BLOCK    </style>
 #{Rally::AppSdk::AppTemplateBuilder::HTML_DEBUG}
 # Ignore 'local' build version of App
 #{Rally::AppSdk::AppTemplateBuilder::HTML_LOCAL}
+#Ignore All hidden files.
+.*
     END
   end
 end
