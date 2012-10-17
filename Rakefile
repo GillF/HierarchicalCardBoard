@@ -9,14 +9,10 @@ task :default => [:debug, :build]
 
 desc "Create an app with the provided name (and optional SDK version and rally server)"
 task :new, :app_name, :sdk_version, :server do |t, args|
-  args.with_defaults(:sdk_version => "2.0p5", :server => "https://rally1.rallydev.com")
+  args.with_defaults(:sdk_version => "2.0p5")
   Dir.chdir(Rake.original_dir)
-
-  server = set_https(args[:server])
-  puts "Generating new #{args[:sdk_version]} App Development framework..."
-  puts "Server: #{server}"
-
-  config = Rally::AppSdk::AppConfig.new(args.app_name, args.sdk_version, server)
+  puts "Generating new #{args[:sdk_version]} Rally App Development framework..."
+  config = Rally::AppSdk::AppConfig.new(args.app_name, args.sdk_version, args.server)
   Rally::AppSdk::AppTemplateBuilder.new(config).build
 
   puts "Finished!"
@@ -643,6 +639,7 @@ module Rally
     class AppConfig
       SDK_FILE = "sdk.js"
       SDK_DEBUG_FILE = "sdk-debug.js"
+      DEFAULT_SERVER = "https://rally1.rallydev.com"
 
       attr_reader :name, :sdk_version, :server
       attr_accessor :javascript, :css, :class_name
@@ -689,14 +686,19 @@ module Rally
         config
       end
 
-      def initialize(name, sdk_version, server, config_file = nil, deploy_file = nil)
+      def initialize(name, sdk_version, server = nil, config_file = nil, deploy_file = nil)
         @name = sanitize_string name
         @sdk_version = sdk_version
-        @server = server
+        @server = set_https(server || DEFAULT_SERVER)
         @config_file = config_file
         @deploy_file = deploy_file
         @javascript = []
         @css = []
+       
+        if server.nil?
+          puts "Defaulting to: #{@server}"
+          puts "(!) You can specify \"server\": \"https://xxx.rallydev.com\" in config.json"
+        end
       end
 
       def javascript=(file)
