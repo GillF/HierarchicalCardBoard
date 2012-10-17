@@ -1,7 +1,6 @@
 {
     "name": "HierarchicalCardBoard",
     "className": "Hackathon.HierarchicalCardBoard",
-    "server": "https://hackathon.rallydev.com",
     "sdk": "2.0p5",
     "javascript": [
         // "ArtifactHolder.js",
