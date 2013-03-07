@@ -26,6 +26,10 @@ On mac:
 
     cd /Applications
     open Google\ Chrome.app --args --disable-web-security --allow-file-access-from-files --allow-cross-origin-auth-prompt
+    
+## Screenshot
+![Split pane with tree of Portfolio Items on left and a Card Board on the right of the currently selected PI's children.](https://raw.github.com/RallyCommunity/HierarchicalCardBoard/master/Hierarchical_Card_Board_Screenshot.png)
+
 
 ## License
 
